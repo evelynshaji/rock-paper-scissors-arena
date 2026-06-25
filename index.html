@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Rock Paper Scissors — Arena</title>
+<style>
+  :root{
+    --ink:#13151a;
+    --ink-soft:#1c1f27;
+    --panel:#21242e;
+    --line:rgba(255,255,255,0.08);
+    --paper:#f4ede0;
+    --ember:#ff7a3d;
+    --ember-soft:#ffb088;
+    --win:#5fd99c;
+    --lose:#ff5f6d;
+    --tie:#e8c468;
+    --text:#eceef2;
+    --text-dim:#8b8fa0;
+    --display: "Rubik Mono One", "Arial Black", sans-serif;
+    --mono: "JetBrains Mono", "Courier New", monospace;
+    --body: "Inter", -apple-system, sans-serif;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+
+  body{
+    min-height:100vh;
+    background:
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(255,122,61,0.12), transparent 60%),
+      var(--ink);
+    color:var(--text);
+    font-family:var(--body);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:32px 16px 60px;
+    overflow-x:hidden;
+  }
+
+  /* subtle floor grid for "arena" feel */
+  body::before{
+    content:"";
+    position:fixed;
+    inset:0;
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size:40px 40px;
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black 0%, transparent 75%);
+    pointer-events:none;
+    z-index:0;
+  }
+
+  .wrap{
+    position:relative;
+    z-index:1;
+    width:100%;
+    max-width:640px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+  }
+
+  header{
+    text-align:center;
+    margin-bottom:28px;
+  }
+
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:0.25em;
+    text-transform:uppercase;
+    color:var(--ember-soft);
+    margin:0 0 10px;
+  }
+
+  h1{
+    font-family:var(--display);
+    font-size:clamp(28px, 6vw, 44px);
+    line-height:1;
+    margin:0;
+    letter-spacing:0.01em;
+    color:#ffffff;
+  }
+  h1 span{ color:#ffffff; }
+
+  /* Scoreboard */
+  .scoreboard{
+    display:flex;
+    align-items:center;
+    gap:18px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:14px 22px;
+    margin-bottom:30px;
+    font-family:var(--mono);
+  }
+  .score-block{ text-align:center; min-width:64px; }
+  .score-label{
+    font-size:10px;
+    letter-spacing:0.15em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    margin-bottom:4px;
+  }
+  .score-value{ font-size:26px; font-weight:700; }
+  .score-value.you{ color:var(--win); }
+  .score-value.cpu{ color:var(--lose); }
+  .score-divider{
+    width:1px; height:30px; background:var(--line);
+  }
+
+  /* Arena where the clash happens */
+  .arena{
+    position:relative;
+    width:100%;
+    height:160px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    margin-bottom:18px;
+  }
+
+  .fighter{
+    width:84px;
+    height:84px;
+    border-radius:50%;
+    background:var(--ink-soft);
+    border:2px solid var(--line);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:40px;
+    position:absolute;
+    transition: transform 0.18s ease;
+  }
+  .fighter.you{ left:calc(50% - 150px); }
+  .fighter.cpu{ left:calc(50% + 66px); }
+
+  .vs-label{
+    font-family:var(--display);
+    font-size:18px;
+    color:var(--text-dim);
+    opacity:0.5;
+  }
+
+  /* impact flash */
+  .impact{
+    position:absolute;
+    width:10px;height:10px;
+    border-radius:50%;
+    background:var(--ember);
+    opacity:0;
+    box-shadow:0 0 0 0 rgba(255,122,61,0.5);
+  }
+
+  .shake{ animation: shake 0.35s ease; }
+  @keyframes shake{
+    0%,100%{ transform:translateX(0); }
+    20%{ transform:translateX(-6px) rotate(-2deg); }
+    40%{ transform:translateX(5px) rotate(2deg); }
+    60%{ transform:translateX(-4px) rotate(-1deg); }
+    80%{ transform:translateX(3px) rotate(1deg); }
+  }
+
+  .bump-left{ animation: bumpLeft 0.4s ease; }
+  .bump-right{ animation: bumpRight 0.4s ease; }
+  @keyframes bumpLeft{
+    0%{ transform:translateX(0); }
+    50%{ transform:translateX(40px); }
+    100%{ transform:translateX(0); }
+  }
+  @keyframes bumpRight{
+    0%{ transform:translateX(0); }
+    50%{ transform:translateX(-40px); }
+    100%{ transform:translateX(0); }
+  }
+
+  @keyframes flashPop{
+    0%{ opacity:0; transform:scale(0.4); }
+    35%{ opacity:1; transform:scale(2.6); box-shadow:0 0 40px 16px rgba(255,122,61,0.45); }
+    100%{ opacity:0; transform:scale(3.4); }
+  }
+  .impact.go{ animation: flashPop 0.45s ease-out; }
+
+  /* Verdict banner */
+  .verdict{
+    font-family:var(--display);
+    font-size:clamp(22px, 5vw, 32px);
+    text-align:center;
+    min-height:1.3em;
+    margin-bottom:6px;
+    letter-spacing:0.02em;
+    opacity:0;
+    transform:translateY(6px);
+  }
+  .verdict.show{
+    animation: verdictIn 0.32s ease forwards;
+  }
+  @keyframes verdictIn{
+    to{ opacity:1; transform:translateY(0); }
+  }
+  .verdict.win{ color:var(--win); }
+  .verdict.lose{ color:var(--lose); }
+  .verdict.tie{ color:var(--tie); }
+
+  .subline{
+    font-family:var(--mono);
+    font-size:13px;
+    color:var(--text-dim);
+    text-align:center;
+    min-height:1.4em;
+    margin-bottom:30px;
+  }
+  .subline b{ color:var(--text); font-weight:600; }
+
+  /* Move buttons */
+  .moves{
+    display:flex;
+    gap:16px;
+    margin-bottom:8px;
+  }
+
+  .move-btn{
+    width:88px;
+    height:88px;
+    border-radius:50%;
+    border:2px solid var(--line);
+    background:var(--panel);
+    color:var(--text);
+    font-size:38px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    position:relative;
+  }
+  .move-btn:hover{
+    transform:translateY(-4px);
+    border-color:var(--ember);
+    background:var(--ink-soft);
+  }
+  .move-btn:active{ transform:translateY(-1px) scale(0.96); }
+  .move-btn:focus-visible{
+    outline:2px solid var(--ember);
+    outline-offset:3px;
+  }
+  .move-btn .tag{
+    position:absolute;
+    bottom:-22px;
+    font-family:var(--mono);
+    font-size:10px;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+  }
+
+  .move-btn[disabled]{
+    opacity:0.45;
+    cursor:default;
+    transform:none !important;
+  }
+
+  /* countdown */
+  .countdown{
+    font-family:var(--display);
+    font-size:48px;
+    color:var(--ember);
+    height:0;
+    overflow:visible;
+  }
+
+  .reset-link{
+    margin-top:18px;
+    background:none;
+    border:1px solid var(--line);
+    color:var(--text-dim);
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    padding:8px 16px;
+    border-radius:20px;
+    cursor:pointer;
+    transition: border-color 0.15s ease, color 0.15s ease;
+  }
+  .reset-link:hover{
+    border-color:var(--lose);
+    color:var(--lose);
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .shake, .bump-left, .bump-right, .impact.go, .verdict.show{
+      animation:none !important;
+    }
+  }
+
+  @media (max-width:420px){
+    .fighter.you{ left:calc(50% - 120px); }
+    .fighter.cpu{ left:calc(50% + 36px); }
+    .moves{ gap:12px; }
+    .move-btn{ width:74px; height:74px; font-size:32px; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="wrap">
+    <header>
+      <p class="eyebrow">Best instinct wins</p>
+      <h2>ROCK · PAPER · SCISSORS</h2>
+    </header>
+
+    <div class="scoreboard">
+      <div class="score-block">
+        <div class="score-label">You</div>
+        <div class="score-value you" id="youScore">0</div>
+      </div>
+      <div class="score-divider"></div>
+      <div class="score-block">
+        <div class="score-label">Ties</div>
+        <div class="score-value" id="tieScore" style="color:var(--tie)">0</div>
+      </div>
+      <div class="score-divider"></div>
+      <div class="score-block">
+        <div class="score-label">Computer</div>
+        <div class="score-value cpu" id="cpuScore">0</div>
+      </div>
+    </div>
+
+    <div class="arena" id="arena">
+      <div class="fighter you" id="youFighter">✊</div>
+      <span class="vs-label" id="vsLabel">VS</span>
+      <div class="fighter cpu" id="cpuFighter">✊</div>
+      <div class="impact" id="impact"></div>
+    </div>
+
+    <div class="verdict" id="verdict"></div>
+    <div class="subline" id="subline">Pick a move to start the round.</div>
+
+    <div class="moves" id="moves">
+      <button class="move-btn" data-move="rock" aria-label="Play rock">
+        ✊<span class="tag">Rock</span>
+      </button>
+      <button class="move-btn" data-move="paper" aria-label="Play paper">
+        ✋<span class="tag">Paper</span>
+      </button>
+      <button class="move-btn" data-move="scissors" aria-label="Play scissors">
+        ✌️<span class="tag">Scissors</span>
+      </button>
+    </div>
+
+    <button class="reset-link" id="resetBtn">Reset match</button>
+  </div>
+
+<script>
+  const ICONS = { rock:'✊', paper:'✋', scissors:'✌️' };
+  const BEATS = { rock:'scissors', paper:'rock', scissors:'paper' };
+
+  const youFighter = document.getElementById('youFighter');
+  const cpuFighter = document.getElementById('cpuFighter');
+  const impact = document.getElementById('impact');
+  const verdictEl = document.getElementById('verdict');
+  const sublineEl = document.getElementById('subline');
+  const moveButtons = document.querySelectorAll('.move-btn');
+  const youScoreEl = document.getElementById('youScore');
+  const cpuScoreEl = document.getElementById('cpuScore');
+  const tieScoreEl = document.getElementById('tieScore');
+  const resetBtn = document.getElementById('resetBtn');
+  const vsLabel = document.getElementById('vsLabel');
+
+  let score = { you:0, cpu:0, tie:0 };
+  let locked = false;
+
+  function pickComputerMove(){
+    const moves = ['rock','paper','scissors'];
+    return moves[Math.floor(Math.random() * 3)];
+  }
+
+  function decide(playerMove, cpuMove){
+    if(playerMove === cpuMove) return 'tie';
+    if(BEATS[playerMove] === cpuMove) return 'win';
+    return 'lose';
+  }
+
+  function setButtonsDisabled(disabled){
+    moveButtons.forEach(btn => btn.disabled = disabled);
+  }
+
+  async function playRound(playerMove){
+    if(locked) return;
+    locked = true;
+    setButtonsDisabled(true);
+
+    sublineEl.innerHTML = 'Reading the room&hellip;';
+    verdictEl.className = 'verdict';
+    verdictEl.textContent = '';
+    vsLabel.style.opacity = 0.5;
+    vsLabel.textContent = 'VS';
+
+    youFighter.textContent = ICONS[playerMove];
+
+    // quick "shuffle" tease on the cpu side before reveal
+    const tease = ['rock','paper','scissors'];
+    let teaseStep = 0;
+    const teaseInterval = setInterval(() => {
+      cpuFighter.textContent = ICONS[tease[teaseStep % 3]];
+      teaseStep++;
+    }, 90);
+
+    await wait(550);
+    clearInterval(teaseInterval);
+
+    const cpuMove = pickComputerMove();
+    cpuFighter.textContent = ICONS[cpuMove];
+
+    const outcome = decide(playerMove, cpuMove);
+
+    // collision moment
+    document.getElementById('arena').classList.add('shake');
+    youFighter.classList.add('bump-right');
+    cpuFighter.classList.add('bump-left');
+    impact.classList.add('go');
+    vsLabel.textContent = '✦';
+
+    await wait(420);
+
+    document.getElementById('arena').classList.remove('shake');
+    youFighter.classList.remove('bump-right');
+    cpuFighter.classList.remove('bump-left');
+    impact.classList.remove('go');
+
+    applyOutcome(outcome, playerMove, cpuMove);
+
+    locked = false;
+    setButtonsDisabled(false);
+  }
+
+  function applyOutcome(outcome, playerMove, cpuMove){
+    if(outcome === 'win') score.you++;
+    else if(outcome === 'lose') score.cpu++;
+    else score.tie++;
+
+    youScoreEl.textContent = score.you;
+    cpuScoreEl.textContent = score.cpu;
+    tieScoreEl.textContent = score.tie;
+
+    verdictEl.textContent =
+      outcome === 'win' ? 'YOU WIN' :
+      outcome === 'lose' ? 'CPU WINS' :
+      'TIE';
+    verdictEl.className = `verdict show ${outcome}`;
+
+    sublineEl.innerHTML =
+      `You played <b>${playerMove}</b>, CPU played <b>${cpuMove}</b>.`;
+  }
+
+  function wait(ms){ return new Promise(r => setTimeout(r, ms)); }
+
+  moveButtons.forEach(btn => {
+    btn.addEventListener('click', () => playRound(btn.dataset.move));
+  });
+
+  resetBtn.addEventListener('click', () => {
+    score = { you:0, cpu:0, tie:0 };
+    youScoreEl.textContent = '0';
+    cpuScoreEl.textContent = '0';
+    tieScoreEl.textContent = '0';
+    verdictEl.className = 'verdict';
+    verdictEl.textContent = '';
+    sublineEl.textContent = 'Pick a move to start the round.';
+    youFighter.textContent = '✊';
+    cpuFighter.textContent = '✊';
+    vsLabel.textContent = 'VS';
+  });
+
+  // keyboard shortcuts: r / p / s
+  document.addEventListener('keydown', (e) => {
+    const key = e.key.toLowerCase();
+    if(key === 'r') playRound('rock');
+    if(key === 'p') playRound('paper');
+    if(key === 's') playRound('scissors');
+  });
+</script>
+</body>
+</html>
